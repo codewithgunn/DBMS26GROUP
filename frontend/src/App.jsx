@@ -28,7 +28,7 @@ const PaymentModal = ({ table, onConfirm, onCancel }) => {
         </div>
         <div className="modal-actions">
           <button className="nav-btn" onClick={onCancel}>Cancel</button>
-          <button className="submit-btn" style={{gridColumn: 'auto'}} onClick={() => onConfirm(amount, phone, name)}>Confirm Payment</button>
+          <button className="submit-btn" style={{gridColumn: 'span 1', width: 'auto'}} onClick={() => onConfirm(amount, phone, name)}>Confirm Payment</button>
         </div>
       </div>
     </div>
@@ -213,7 +213,7 @@ function App() {
               .map(([size, time]) => (
               <div key={size} className="matrix-card">
                 <span className="matrix-label">{size}-Seater Wait</span>
-                <span className={`matrix-value ${time === 0 ? 'ready' : 'wait'}`}>
+                <span className="matrix-value">
                   {time === 0 ? 'READY' : `${time} min`}
                 </span>
               </div>
@@ -287,7 +287,7 @@ function App() {
                     )}
                     <div className="table-actions">
                       {table.status === 'Occupied' ? (
-                        isManager && <button onClick={() => handleAction(table, 'pay')} className="action-btn btn-pay">Collect Bill</button>
+                        (isManager || isFloorManager) && <button onClick={() => handleAction(table, 'pay')} className="action-btn btn-pay">Collect Bill</button>
                       ) : table.status === 'Dirty' ? (
                         <button onClick={() => handleAction(table, 'clean')} className="action-btn btn-clean">Mark Clean</button>
                       ) : (
@@ -334,94 +334,6 @@ function App() {
         />
       )}
 
-      <style dangerouslySetInnerHTML={{__html: `
-        .queue-item-new {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background: var(--input-bg);
-          border-radius: 0.75rem;
-          margin-bottom: 0.75rem;
-          border: 1px solid var(--border);
-        }
-        .seat-btn-new {
-          background: var(--primary);
-          color: white;
-          border: none;
-          padding: 0.5rem 0.75rem;
-          border-radius: 0.5rem;
-          font-weight: 600;
-          font-size: 0.75rem;
-        }
-        .timer-badge {
-          font-size: 0.75rem;
-          font-weight: 700;
-          color: var(--danger);
-          margin-bottom: 1rem;
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
-        }
-        .ready-text {
-          color: var(--success);
-          font-weight: 700;
-          font-size: 0.875rem;
-          text-align: center;
-          padding: 0.625rem;
-        }
-        .bill-card-new {
-          padding: 1rem;
-          border-bottom: 1px solid var(--border);
-        }
-        .pay-tag {
-          font-size: 0.6rem;
-          background: rgba(16, 185, 129, 0.1);
-          color: #10b981;
-          padding: 0.1rem 0.4rem;
-          border-radius: 4px;
-          font-weight: 800;
-        }
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: var(--modal-overlay);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          backdrop-filter: blur(4px);
-        }
-        .modal-content {
-          background: var(--card-bg);
-          padding: 2rem;
-          border-radius: 1.5rem;
-          width: 100%;
-          max-width: 400px;
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-          border: 1px solid var(--border);
-          color: var(--text-main);
-        }
-        .form-group {
-          margin-bottom: 1rem;
-        }
-        .form-group label {
-          display: block;
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: var(--text-muted);
-          margin-bottom: 0.25rem;
-        }
-        .modal-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 1rem;
-          margin-top: 2rem;
-        }
-      `}} />
     </div>
   )
 }

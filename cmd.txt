@@ -1,0 +1,43 @@
+  1. Reset Database & Start Backend (Terminal 1)
+  Run these commands to wipe the database, seed it with fresh data, and start the API server.
+
+   1 # Activate the virtual environment
+   2 source venv/bin/activate
+   3
+   4 # Optional: Run the seed script if you want fresh historical data for wait predictions
+   5 python seed_history.py
+   6
+   7 # Start the Backend (API will be at http://localhost:8000)
+   8 uvicorn main:app --reload --port 8000
+  Note: The main.py is configured to automatically drop and recreate all tables every time the server starts, so your DB resets
+  every time you run the command above.
+
+  ---
+
+  2. Start Frontend (Terminal 2)
+  Run this to launch the user interface.
+
+   1 # Navigate to frontend folder
+   2 cd frontend
+   3
+   4 # Start the UI (App will be at http://localhost:5173)
+   5 npm run dev -- --host
+
+
+  3. See All SQL Tables (Any Terminal)
+  You can run these one-liners anytime to peek into the database:
+
+  To see current Table & Waitlist status:
+
+   1 psql -d dinesync -c "SELECT table_number, capacity, status FROM tables ORDER BY table_number;"
+   2 psql -d dinesync -c "SELECT customer_name, party_size, estimated_wait_minutes FROM waitlist;"
+
+  To see Loyalty Customers & Revenue:
+
+   1 psql -d dinesync -c "SELECT name, total_points, cluster_tag FROM customers ORDER BY total_points DESC LIMIT 10;"
+   2 psql -d dinesync -c "SELECT final_total, payment_status, created_at FROM bills ORDER BY created_at DESC LIMIT 5;"
+
+  ---
+
+
+   1 source venv/bin/activate && python seed_history.py && uvicorn main:app --reload --port 8000

@@ -84,6 +84,10 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/")
+def home():
+    return {"status": "DineSync Backend is running", "api_docs": "/docs"}
+
 def get_db():
     db = SessionLocal()
     try: yield db
@@ -172,7 +176,8 @@ def calculate_smart_wait(db: Session, party_size: int):
             
             ai_prediction = model.predict(test_input)[0]
             
-            # Blend: 60% Heuristic (exact table state), 40% AI (learned patterns)
+            # Blend: 60% Heuristic (exact table state), 
+            # ns)
             final_wait = (base_prediction * 0.6) + (ai_prediction * 0.4)
             return int(final_wait)
     except Exception as e:
@@ -180,7 +185,7 @@ def calculate_smart_wait(db: Session, party_size: int):
 
     return int(base_prediction)
 
-# --- SEEDER (GUARANTEED OPEN TABLES) ---
+# --- SEEDER  ---
 @app.on_event("startup")
 def startup_event():
     db = SessionLocal()
@@ -244,6 +249,7 @@ def startup_event():
             
             new_bill = BillDB(
                 customer_id=customers[i].customer_id, 
+                table_id=random.randint(1, 20), # Added missing table_id
                 subtotal=random_amount,
                 final_total=random_amount,
                 payment_status="Paid"

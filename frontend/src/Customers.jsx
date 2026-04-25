@@ -27,7 +27,7 @@ export default function CustomersPage() {
         <div className="customers-container fade-in">
             <div className="page-header-new">
                 <div>
-                    <h2 style={{fontSize: '1.875rem', color: 'var(--text-main)'}}>Loyalty Program</h2>
+                    <h2 style={{fontSize: '2rem', color: 'var(--text-main)', marginBottom: '0.5rem'}}>Loyalty Program</h2>
                     <p style={{color: 'var(--text-muted)'}}>Manage your restaurant's customer base and rewards.</p>
                 </div>
             </div>
@@ -37,23 +37,25 @@ export default function CustomersPage() {
                     <span className="search-icon">🔍</span>
                     <input
                         type="text"
-                        placeholder="Search by name or phone..."
+                        placeholder="Search by name or phone number..."
                         className="input-field search-input-new"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                
-                <select 
-                    className="input-field filter-select-new"
-                    value={selectedTag}
-                    onChange={(e) => setSelectedTag(e.target.value)}
-                >
-                    <option value="All">All Tiers</option>
-                    <option value="VIP">🌟 VIP Tier</option>
-                    <option value="Regular">🔁 Regular Tier</option>
-                    <option value="New">👋 New Members</option>
-                </select>
+
+                <div className="filter-wrapper">
+                    <select 
+                        className="input-field filter-select-new"
+                        value={selectedTag}
+                        onChange={(e) => setSelectedTag(e.target.value)}
+                    >
+                        <option value="All">All Tiers</option>
+                        <option value="VIP">🌟 VIP Tier</option>
+                        <option value="Regular">🔁 Regular Tier</option>
+                        <option value="New">👋 New Members</option>
+                    </select>
+                </div>
             </div>
 
             <div className="table-card-new">
@@ -95,48 +97,62 @@ export default function CustomersPage() {
 
             <style dangerouslySetInnerHTML={{__html: `
                 .customers-container {
-                    padding: 2rem;
-                    max-width: 1400px;
+                    padding: 2rem 3rem;
+                    max-width: 1600px;
                     margin: 0 auto;
                 }
                 .page-header-new {
-                    margin-bottom: 2rem;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-end;
+                    margin-bottom: 3rem;
                 }
                 .controls-bar {
                     display: flex;
-                    gap: 1rem;
-                    margin-bottom: 2rem;
+                    gap: 1.5rem;
+                    margin-bottom: 2.5rem;
+                    align-items: center;
                 }
                 .search-wrapper {
                     position: relative;
+                    flex: 5; /* EVEN BIGGER */
+                }
+                .filter-wrapper {
                     flex: 1;
+                    min-width: 200px;
                 }
                 .search-icon {
                     position: absolute;
-                    left: 1rem;
+                    left: 1.25rem;
                     top: 50%;
                     transform: translateY(-50%);
                     color: var(--text-muted);
+                    font-size: 1.1rem;
                 }
                 .search-input-new {
-                    padding-left: 2.75rem !important;
-                    height: 3rem;
+                    padding-left: 3.5rem !important;
+                    height: 3.5rem;
                     font-size: 1rem !important;
+                    border-radius: var(--radius-md);
+                    background: var(--surface);
                 }
                 .filter-select-new {
-                    width: 200px;
-                    height: 3rem;
+                    width: 100%;
+                    height: 3.5rem;
                     font-size: 1rem !important;
+                    border-radius: var(--radius-md);
+                    background: var(--surface);
+                    cursor: pointer;
+                    padding: 0 1rem;
+                }
+                /* Style option elements for dark mode support */
+                .filter-select-new option {
+                    background-color: var(--surface);
+                    color: var(--text-main);
                 }
                 .table-card-new {
                     background: var(--card-bg);
-                    border-radius: 1rem;
+                    border-radius: var(--radius-lg);
                     border: 1px solid var(--border);
                     overflow: hidden;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                    box-shadow: var(--shadow-md);
                 }
                 .data-table {
                     width: 100%;
@@ -144,16 +160,16 @@ export default function CustomersPage() {
                 }
                 .data-table th {
                     text-align: left;
-                    padding: 1rem 1.5rem;
-                    background: var(--input-bg);
+                    padding: 1.25rem 2rem;
+                    background: var(--primary-bg);
                     font-size: 0.75rem;
-                    font-weight: 700;
+                    font-weight: 800;
                     color: var(--text-muted);
                     border-bottom: 1px solid var(--border);
-                    letter-spacing: 0.05em;
+                    letter-spacing: 0.1em;
                 }
                 .data-table td {
-                    padding: 1.25rem 1.5rem;
+                    padding: 1.5rem 2rem;
                     border-bottom: 1px solid var(--border);
                     color: var(--text-main);
                 }
@@ -166,21 +182,24 @@ export default function CustomersPage() {
                     color: var(--primary);
                 }
                 .tier-badge {
-                    padding: 0.375rem 0.75rem;
+                    padding: 0.5rem 1rem;
                     border-radius: 9999px;
                     font-size: 0.75rem;
-                    font-weight: 700;
+                    font-weight: 800;
                     text-transform: uppercase;
+                    letter-spacing: 0.05em;
                 }
-                .tier-vip { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }
-                .tier-regular { background: rgba(79, 70, 229, 0.1); color: var(--primary); border: 1px solid rgba(79, 70, 229, 0.2); }
-                .tier-new { background: rgba(148, 163, 184, 0.1); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.2); }
+                .tier-vip { background: var(--warning-bg); color: var(--warning); }
+                .tier-regular { background: var(--primary-bg); color: var(--primary); }
+                .tier-new { background: var(--success-bg); color: var(--success); }
                 .empty-state {
                     text-align: center;
-                    padding: 4rem !important;
+                    padding: 5rem !important;
                     color: var(--text-muted);
+                    font-style: italic;
                 }
             `}} />
         </div>
     );
 }
+
