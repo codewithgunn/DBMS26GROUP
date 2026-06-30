@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function CustomersPage() {
+export default function CustomersPage({ xRole }) {
     const [customers, setCustomers] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedTag, setSelectedTag] = useState("All");
@@ -8,7 +8,10 @@ export default function CustomersPage() {
     useEffect(() => {
         const fetchCustomers = async () => {
             try {
-                const response = await fetch(`/api/customers?search=${searchTerm}&tag=${selectedTag}`);
+                const response = await fetch(
+                    `/api/customers?search=${encodeURIComponent(searchTerm)}&tag=${encodeURIComponent(selectedTag)}`,
+                    { headers: { 'X-Role': xRole || '' } }
+                );
                 const data = await response.json();
                 setCustomers(data);
             } catch (error) {
@@ -21,7 +24,7 @@ export default function CustomersPage() {
         }, 300);
 
         return () => clearTimeout(delayDebounceFn);
-    }, [searchTerm, selectedTag]);
+    }, [searchTerm, selectedTag, xRole]);
 
     return (
         <div className="customers-container fade-in">
@@ -202,4 +205,3 @@ export default function CustomersPage() {
         </div>
     );
 }
-

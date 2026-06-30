@@ -1,4 +1,5 @@
 import os
+import math
 import datetime
 import random
 import pandas as pd
@@ -13,8 +14,8 @@ class HistoricalWaitDB(Base):
     __tablename__ = "historical_waits"
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime)
-    day_of_week = Column(Integer) # 0-6
-    hour_of_day = Column(Integer) # 0-23
+    day_of_week = Column(Integer)  # 0-6
+    hour_of_day = Column(Integer)  # 0-23
     party_size = Column(Integer)
     occupied_tables = Column(Integer)
     waitlist_count = Column(Integer)
@@ -28,54 +29,73 @@ Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine)
 db = SessionLocal()
 
+# Graded day-of-week multiplier (Mon=0 ... Sun=6) instead of a flat weekday/weekend
+# binary. Gives day_of_week real, independent signal rather than just duplicating
+# whatever "is_weekend" would have encoded.
+DAY_MULTIPLIER = [0.90, 0.85, 0.92, 1.00, 1.15, 1.35, 1.30]
+
+
+def hour_busyness(hour):
+    """Smooth, continuous busyness curve with a lunch peak (~1pm) and dinner peak
+    (~7:30pm), instead of a single binary is_peak flag. Returns roughly 0.0 (quiet)
+    to ~1.1 (peak). Other features are driven off this curve but each gets its own
+    independent noise term below, so they end up correlated with hour_of_day (as
+    real restaurant data would be) without being deterministic proxies for it."""
+    lunch = math.exp(-((hour - 13.0) ** 2) / (2 * 1.4 ** 2))
+    dinner = math.exp(-((hour - 19.5) ** 2) / (2 * 1.8 ** 2))
+    return lunch + dinner
+
+
 def generate_history():
-    print("📊 Generating 1000+ entries of historical dining data...")
+    print("📊 Generating ~3,000+ entries of historical dining data (decorrelated features)...")
     db.query(HistoricalWaitDB).delete()
-    
-    start_date = datetime.datetime.now() - datetime.timedelta(days=30)
+
+    start_date = datetime.datetime.now() - datetime.timedelta(days=45)
     data = []
 
-    for day in range(30):
+    for day in range(45):
         current_date = start_date + datetime.timedelta(days=day)
-        
-        # Simulate different hours (11 AM to 11 PM)
+        dow = current_date.weekday()
+        day_mult = DAY_MULTIPLIER[dow]
+
         for hour in range(11, 23):
-            # Peak hours: 1 PM - 2 PM and 7 PM - 9 PM
-            is_peak = (13 <= hour <= 14) or (19 <= hour <= 21)
-            is_weekend = current_date.weekday() >= 5
-            
-            # Number of groups arriving per hour
-            num_groups = random.randint(3, 8)
-            if is_peak: num_groups += random.randint(5, 12)
-            if is_weekend: num_groups += random.randint(4, 8)
+            busy = hour_busyness(hour)
+
+            # Number of groups walking in this hour: driven by busyness + day
+            # multiplier, plus independent randomness so it's not a pure function
+            # of hour alone.
+            base_groups = 3 + busy * 9 * day_mult
+            num_groups = max(1, int(round(random.gauss(base_groups, 2.0))))
 
             for _ in range(num_groups):
-                party_size = random.choice([2, 2, 2, 4, 4, 6])
-                
-                # Contextual features
-                occ_tables = random.randint(5, 15)
-                if is_peak: occ_tables = random.randint(15, 20)
-                
-                wl_count = random.randint(0, 3)
-                if is_peak: wl_count = random.randint(4, 10)
+                party_size = random.choice([2, 2, 2, 3, 4, 4, 5, 6])
 
-                # Ground Truth Wait Time Formula (Base + Factors + Noise)
-                # Base 5 mins
-                wait = 5.0
-                wait += (party_size * 1.5)
-                wait += (occ_tables * 2.0)
-                wait += (wl_count * 4.0)
-                
-                if is_weekend: wait *= 1.2
-                if is_peak: wait *= 1.3
-                
-                # Add noise
-                wait += random.uniform(-5, 5)
+                # Occupied tables: driven by busyness, but with its OWN independent
+                # noise term (std=3.0) so it's not a perfect copy of waitlist_count.
+                occ_tables = 5 + busy * 13 * day_mult + random.gauss(0, 3.0)
+                occ_tables = int(min(20, max(0, round(occ_tables))))
+
+                # Waitlist count: also driven by busyness, but with a DIFFERENT
+                # scale and a SEPARATE independent noise source (std=1.8).
+                wl_count = busy * 7 * day_mult + random.gauss(0, 1.8)
+                wl_count = int(min(15, max(0, round(wl_count))))
+
+                # Ground-truth wait time. Coefficients are deliberately closer in
+                # magnitude (no single feature contributes an order of magnitude
+                # more than the others), and there's a genuinely independent
+                # observation-noise term per row.
+                wait = 4.0
+                wait += party_size * 1.8
+                wait += occ_tables * 1.6
+                wait += wl_count * 2.6
+                wait *= day_mult
+                wait += busy * 6.0              # small direct time-of-day effect
+                wait += random.gauss(0, 4.0)    # independent noise
                 wait = max(0, wait)
 
                 entry = HistoricalWaitDB(
                     timestamp=current_date.replace(hour=hour, minute=random.randint(0, 59)),
-                    day_of_week=current_date.weekday(),
+                    day_of_week=dow,
                     hour_of_day=hour,
                     party_size=party_size,
                     occupied_tables=occ_tables,
@@ -86,6 +106,7 @@ def generate_history():
 
     db.commit()
     print("✅ Historical data seeded successfully!")
+
 
 if __name__ == "__main__":
     generate_history()

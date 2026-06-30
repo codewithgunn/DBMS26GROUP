@@ -3,6 +3,13 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import CustomersPage from './Customers';
 import './App.css';
 
+// Backend expects these exact strings in the X-Role header (see require_role() in main.py)
+const ROLE_HEADER_MAP = {
+  manager: 'Manager',
+  floor_manager: 'Floor Manager',
+  receptionist: 'Receptionist',
+};
+
 const PaymentModal = ({ table, onConfirm, onCancel }) => {
   const [amount, setAmount] = useState(1000);
   const [phone, setPhone] = useState('');
@@ -47,9 +54,21 @@ function App() {
   const [qPhone, setQPhone] = useState('');
   const [qSize, setQSize] = useState(2);
 
+  // Wraps fetch() to always attach the X-Role header the backend now requires
+  // for protected endpoints. Merges in any extra headers/options passed.
+  const apiFetch = (url, options = {}) => {
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        'X-Role': ROLE_HEADER_MAP[role] || '',
+      },
+    });
+  };
+
   const fetchData = async () => {
     try {
-      const response = await fetch('/api/dashboard');
+      const response = await apiFetch('/api/dashboard');
       const result = await response.json();
       setData(result);
     } catch (error) { console.error("API Error"); }
@@ -89,7 +108,7 @@ function App() {
     if (action === 'pay') {
       setActivePayment(table);
     } else {
-      await fetch(`/api/tables/${table.table_id}/clean`, { method: 'POST' });
+      await apiFetch(`/api/tables/${table.table_id}/clean`, { method: 'POST' });
       fetchData();
     }
   };
@@ -100,7 +119,11 @@ function App() {
       return;
     }
     const cleanPhone = phone.trim();
-    await fetch(`/api/tables/${activePayment.table_id}/pay?amount=${amount}&phone=${cleanPhone}&name=${name}`, { method: 'POST' });
+    await apiFetch(`/api/tables/${activePayment.table_id}/pay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: Number(amount), phone: cleanPhone, name: name || 'Guest' }),
+    });
     setActivePayment(null);
     fetchData();
   };
@@ -109,10 +132,12 @@ function App() {
     e.preventDefault();
     if (!qName || !qPhone) return;
 
-    const url = `/api/queue/add?name=${encodeURIComponent(qName)}&size=${qSize}&phone=${encodeURIComponent(qPhone)}`;
-
     try {
-      const response = await fetch(url, { method: 'POST' });
+      const response = await apiFetch('/api/queue/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: qName, size: Number(qSize), phone: qPhone }),
+      });
       if (response.ok) {
         setQName('');
         setQPhone('');
@@ -122,7 +147,7 @@ function App() {
   };
 
   const seatGuest = async (waitlistId) => {
-    const response = await fetch(`/api/queue/seat/${waitlistId}`, { method: 'POST' });
+    const response = await apiFetch(`/api/queue/seat/${waitlistId}`, { method: 'POST' });
     const result = await response.json();
     if (result.error) alert(result.error); 
     else fetchData(); 
@@ -322,7 +347,7 @@ function App() {
             )}
           </div>
         ) : (
-          <CustomersPage />
+          <CustomersPage xRole={ROLE_HEADER_MAP[role]} />
         )}
       </main>
 

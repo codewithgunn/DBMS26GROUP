@@ -2,7 +2,8 @@ import os
 import datetime
 import random
 from datetime import timedelta
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header
+from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
@@ -77,12 +78,43 @@ class LoyaltyRedemptionDB(Base):
     discount_amount = Column(Float)
     redeemed_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-# WIPE EVERYTHING and start fresh
-Base.metadata.drop_all(bind=engine)
+# WIPE EVERYTHING and start fresh — controlled by RESET_DB env var (default: true, preserves
+# the existing demo workflow in cmd.txt). Set RESET_DB=false to keep data across restarts.
+RESET_DB = os.getenv("RESET_DB", "true").lower() == "true"
+if RESET_DB:
+    Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# --- REQUEST BODY MODELS (replaces raw query params) ---
+class WaitlistCreate(BaseModel):
+    name: str
+    size: int
+    phone: str
+
+class PaymentCreate(BaseModel):
+    amount: float
+    phone: str
+    name: str = "Guest"
+
+# --- ROLE ENFORCEMENT ---
+# Frontend must send an `X-Role` header (e.g. "Receptionist", "Floor Manager", "Manager")
+# matching whichever role the logged-in user selected client-side.
+VALID_ROLES = {"Manager", "Floor Manager", "Receptionist"}
+
+def require_role(*allowed_roles: str):
+    def checker(x_role: str = Header(None)):
+        if x_role not in VALID_ROLES:
+            raise HTTPException(status_code=401, detail="Missing or invalid X-Role header")
+        if x_role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{x_role}' is not permitted to access this endpoint. Allowed: {allowed_roles}"
+            )
+        return x_role
+    return checker
 
 @app.get("/")
 def home():
@@ -299,7 +331,11 @@ def get_dashboard(db: Session = Depends(get_db)):
     }
 
 @app.get("/api/transactions")
-def get_transactions(phone: str = "", db: Session = Depends(get_db)):
+def get_transactions(
+    phone: str = "",
+    db: Session = Depends(get_db),
+    role: str = Depends(require_role("Manager"))
+):
     query = db.query(BillDB)
     if phone:
         query = query.join(CustomerDB).filter(CustomerDB.phone == phone)
@@ -320,7 +356,12 @@ def get_transactions(phone: str = "", db: Session = Depends(get_db)):
     return bill_data
 
 @app.get("/api/customers")
-def get_customers(search: str = "", tag: str = "All", db: Session = Depends(get_db)):
+def get_customers(
+    search: str = "",
+    tag: str = "All",
+    db: Session = Depends(get_db),
+    role: str = Depends(require_role("Manager"))
+):
     # Start with a base query
     query = db.query(CustomerDB)
     
@@ -343,15 +384,23 @@ def get_customers(search: str = "", tag: str = "All", db: Session = Depends(get_
     return customers
 
 @app.post("/api/queue/add")
-def add_to_waitlist(name: str, size: int, phone: str, db: Session = Depends(get_db)):
+def add_to_waitlist(
+    payload: WaitlistCreate,
+    db: Session = Depends(get_db),
+    role: str = Depends(require_role("Receptionist", "Manager"))
+):
     # Updated to use the smart time prediction based on the database state
-    est_wait = calculate_smart_wait(db, size)
-    db.add(WaitlistDB(customer_name=name, party_size=size, phone=phone, estimated_wait_minutes=est_wait))
+    est_wait = calculate_smart_wait(db, payload.size)
+    db.add(WaitlistDB(customer_name=payload.name, party_size=payload.size, phone=payload.phone, estimated_wait_minutes=est_wait))
     db.commit()
     return {"message": "Added"}
 
 @app.post("/api/queue/seat/{waitlist_id}")
-def seat_guest(waitlist_id: int, db: Session = Depends(get_db)):
+def seat_guest(
+    waitlist_id: int,
+    db: Session = Depends(get_db),
+    role: str = Depends(require_role("Receptionist", "Manager"))
+):
     guest = db.query(WaitlistDB).filter(WaitlistDB.waitlist_id == waitlist_id).first()
     if not guest: 
         print(f"❌ Guest ID {waitlist_id} not found in DB")
@@ -372,26 +421,31 @@ def seat_guest(waitlist_id: int, db: Session = Depends(get_db)):
     return {"message": f"Seated at Table {table.table_number}"}
 
 @app.post("/api/tables/{table_id}/pay")
-def pay_bill(table_id: int, amount: float, phone: str, name: str = "Guest", db: Session = Depends(get_db)):
-    print(f"💰 Processing Payment: {amount} for Phone: {phone}")
+def pay_bill(
+    table_id: int,
+    payload: PaymentCreate,
+    db: Session = Depends(get_db),
+    role: str = Depends(require_role("Floor Manager", "Manager"))
+):
+    print(f"💰 Processing Payment: {payload.amount} for Phone: {payload.phone}")
     table = db.query(TableDB).filter(TableDB.table_id == table_id).first()
-    
-    clean_phone = phone.strip()
+
+    clean_phone = payload.phone.strip()
     customer = db.query(CustomerDB).filter(CustomerDB.phone == clean_phone).first()
-    
+
     if not customer:
         print(f"🆕 Creating NEW Customer profile for {clean_phone}")
-        customer = CustomerDB(name=name, phone=clean_phone, total_points=0, visit_count=0, cluster_tag="New")
+        customer = CustomerDB(name=payload.name, phone=clean_phone, total_points=0, visit_count=0, cluster_tag="New")
         db.add(customer)
-        db.flush() 
+        db.flush()
     else:
         print(f"👋 Found EXISTING Customer: {customer.name}. Current Points: {customer.total_points}")
-        if name != "Guest": customer.name = name
+        if payload.name != "Guest": customer.name = payload.name
 
-    points_earned = int(amount * 0.10)
+    points_earned = int(payload.amount * 0.10)
     customer.total_points += points_earned
     customer.visit_count += 1
-    
+
     print(f"📈 Points Updated! New Balance: {customer.total_points}")
 
     if customer.total_points > 1000: customer.cluster_tag = "VIP"
@@ -401,19 +455,23 @@ def pay_bill(table_id: int, amount: float, phone: str, name: str = "Guest", db: 
     new_bill = BillDB(
         customer_id=customer.customer_id,
         table_id=table_id,
-        subtotal=amount,
-        final_total=amount,
+        subtotal=payload.amount,
+        final_total=payload.amount,
         payment_status="Paid"
     )
-    
-    table.status = "Dirty" 
+
+    table.status = "Dirty"
     db.add(new_bill)
     db.commit()
-    
+
     return {"message": "Paid", "points_earned": points_earned}
 
 @app.post("/api/tables/{table_id}/clean")
-def clean_table(table_id: int, db: Session = Depends(get_db)):
+def clean_table(
+    table_id: int,
+    db: Session = Depends(get_db),
+    role: str = Depends(require_role("Floor Manager", "Manager"))
+):
     table = db.query(TableDB).filter(TableDB.table_id == table_id).first()
     table.status = "Available"
     db.commit()
